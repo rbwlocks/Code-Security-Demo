@@ -1,0 +1,137 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Vulnerable CloudFormation Template for Security Training'
+
+Resources:
+  # Publicly Accessible S3 Bucket
+  VulnerableS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: my-public-vulnerable-bucket
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      WebsiteConfiguration:
+        IndexDocument: index.html
+
+  # Public Bucket Policy
+  VulnerableBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref VulnerableS3Bucket
+      PolicyDocument:
+        Statement:
+          - Sid: PublicReadGetObject
+            Effect: Allow
+            Principal: '*'
+            Action: 's3:*'
+            Resource: !Sub '${VulnerableS3Bucket.Arn}/*'
+
+  # Overly Permissive IAM Role
+  VulnerableIAMRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: VulnerableAdminRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AdministratorAccess'
+
+  # Publicly Accessible RDS Database
+  VulnerableDBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow all inbound traffic
+      SecurityGroupIngress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+  VulnerableRDSInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: vulnerable-database
+      Engine: mysql
+      MasterUsername: admin
+      MasterUserPassword: Password123!
+      DBInstanceClass: db.t3.micro
+      AllocatedStorage: 20
+      PubliclyAccessible: true
+      StorageEncrypted: false
+      VPCSecurityGroups:
+        - !Ref VulnerableDBSecurityGroup
+
+  # EC2 Instance with Hardcoded Credentials in UserData
+  VulnerableEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0c55b159cbfafe1f0
+      InstanceType: t2.micro
+      IamInstanceProfile: !Ref VulnerableInstanceProfile
+      SecurityGroupIds:
+        - !Ref VulnerableEC2SecurityGroup
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          export AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+          export AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+          export DB_PASSWORD=Password123!
+          echo "admin:Password123!" > /tmp/credentials.txt
+
+  VulnerableInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref VulnerableIAMRole
+
+  # Insecure Security Group - All ports open
+  VulnerableEC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow all traffic from anywhere
+      SecurityGroupIngress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+  # Unencrypted EBS Volume
+  VulnerableEBSVolume:
+    Type: AWS::EC2::Volume
+    Properties:
+      Size: 10
+      AvailabilityZone: us-east-1a
+      Encrypted: false
+
+  # IAM User with Hardcoded Access Keys
+  VulnerableIAMUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: vulnerable-user
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/PowerUserAccess'
+
+  VulnerableAccessKey:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref VulnerableIAMUser
+
+Outputs:
+  AccessKeyId:
+    Description: Access Key ID (EXPOSED)
+    Value: !Ref VulnerableAccessKey
+  SecretAccessKey:
+    Description: Secret Access Key (EXPOSED)
+    Value: !GetAtt VulnerableAccessKey.SecretAccessKey
+  BucketName:
+    Description: Public S3 Bucket
+    Value: !Ref VulnerableS3Bucket
+  DatabaseEndpoint:
+    Description: Public Database Endpoint
+    Value: !GetAtt VulnerableRDSInstance.Endpoint.Address
