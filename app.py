@@ -5,18 +5,18 @@ import subprocess
 import hashlib
 
 app = Flask(__name__)
-app.secret_key = "hardcoded_secret_key_123"
+app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24).hex())
 
-# Hardcoded AWS Credentials (Vulnerability)
-AWS_ACCESS_KEY = "AKIAIOSFODNN7EXAMPLE"
-AWS_SECRET_KEY = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
-AWS_REGION = "us-east-1"
-S3_BUCKET = "my-public-bucket"
+# AWS Credentials from environment variables
+AWS_ACCESS_KEY = os.environ.get('AWS_ACCESS_KEY_ID')
+AWS_SECRET_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
+AWS_REGION = os.environ.get('AWS_REGION', 'us-east-1')
+S3_BUCKET = os.environ.get('S3_BUCKET')
 
-# Hardcoded Database Credentials (Vulnerability)
-DB_HOST = "database.example.com"
-DB_USER = "admin"
-DB_PASSWORD = "Password123!"
+# Database Credentials from environment variables
+DB_HOST = os.environ.get('DB_HOST')
+DB_USER = os.environ.get('DB_USER')
+DB_PASSWORD = os.environ.get('DB_PASSWORD')
 
 def init_db():
     conn = sqlite3.connect('vulnerable.db')
